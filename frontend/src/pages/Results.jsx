@@ -1,0 +1,34 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { AlertTriangle, ArrowLeft, BrainCircuit, CircleHelp, Download, Eye, FileQuestion, GitCompare, ShieldAlert, Sparkles } from 'lucide-react';
+import SectionHeading from '../components/SectionHeading';
+import XrayMap from '../components/XrayMap';
+import InsightCard from '../components/InsightCard';
+import DownloadModal from '../components/DownloadModal';
+import { useApp } from '../context/AppContext';
+
+export default function Results(){
+  const { analysis, decision }=useApp(); const navigate=useNavigate(); const [tab,setTab]=useState('overview'); const [selected,setSelected]=useState(null); const [download,setDownload]=useState(false);
+  if(!analysis) return <main className="workspace-page empty-state"><BrainCircuit size={38}/><h1>No X-Ray yet.</h1><p>Start a decision analysis to see the visual reasoning map.</p><Link className="btn gold" to="/analyze">New Analysis</Link></main>;
+  const openStress=(title)=>{setSelected({type:'assumption', title});};
+  return <main className="workspace-page result-page">
+    <div className="results-topline"><Link to="/dashboard" className="crumb-back"><ArrowLeft size={15}/> Back to workspace</Link><div><button className="btn soft" onClick={()=>setDownload(true)}><Download size={16}/> Export</button><button className="btn gold" onClick={()=>navigate('/analyze')}>New Analysis</button></div></div>
+    <SectionHeading eyebrow="ANALYSIS RESULTS" title="Here's what your reasoning may be hiding." text={analysis.summary}/>
+    <section className="results-tabs" role="tablist">{[['overview','Overview'],['assumptions','Assumptions'],['blind','Blind Spots'],['conflicts','Conflicts'],['questions','Questions']].map(([id,label])=><button role="tab" aria-selected={tab===id} key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}</section>
+    {tab==='overview'&&<>
+      <section className="result-overview"><div className="summary-stat-card"><span>INSIGHTS FOUND</span><strong>{(analysis.assumptions?.length||0)+(analysis.blind_spots?.length||0)+(analysis.conflicts?.length||0)}</strong><p>Potential places where deeper reasoning could help.</p><div className="stat-breakdown"><span><ShieldAlert/> {analysis.assumptions.length} assumptions</span><span><Eye/> {analysis.blind_spots.length} blind spots</span><span><GitCompare/> {analysis.conflicts.length} conflicts</span></div></div><div className="xray-panel"><div className="panel-heading"><div><span className="eyebrow">REASONING X-RAY MAP</span><h2>How your reasoning connects</h2></div><span className="neutral-badge">No recommendation</span></div><XrayMap map={analysis.reasoning_map} onAssumption={()=>openStress(analysis.assumptions?.[0]?.title||'The outcome will be better than it looks')}/></div></section>
+      <div className="section-mini-head"><div><span className="eyebrow">KEY FINDINGS</span><h2>What deserves your attention.</h2></div><span className="tiny-note">Click any assumption to stress-test it.</span></div>
+      <div className="insight-grid">{analysis.assumptions.map((x,i)=><InsightCard key={'a'+i} type="assumption" title={x.title} description={x.description} footer={`Confidence: ${x.confidence}`} onClick={()=>openStress(x.title)}/>)}{analysis.blind_spots.map((x,i)=><InsightCard key={'b'+i} type="blind" title={x.title} description={x.description} footer={x.why_it_matters}/>)}{analysis.conflicts.map((x,i)=><InsightCard key={'c'+i} type="conflict" title={x.title} description={x.description} footer={x.tension}/>)}</div>
+    </>}
+    {tab==='assumptions'&&<FindingView title="Assumptions worth testing" icon={ShieldAlert} tone="assumption" items={analysis.assumptions} onClick={(x)=>openStress(x.title)}/>} 
+    {tab==='blind'&&<FindingView title="Overlooked factors" icon={Sparkles} tone="blind" items={analysis.blind_spots}/>} 
+    {tab==='conflicts'&&<FindingView title="Potential reasoning conflicts" icon={GitCompare} tone="conflict" items={analysis.conflicts}/>} 
+    {tab==='questions'&&<section className="questions-page"><div className="questions-hero"><div className="q-icon"><CircleHelp/></div><div><span className="eyebrow">THOUGHT-PROVOKING</span><h2>Questions worth answering</h2><p>These are not recommendations. They're prompts that can improve the quality of your next thought.</p></div></div><div className="questions-grid">{analysis.critical_questions.map((q,i)=><article key={i}><span>0{i+1}</span><FileQuestion/><p>{q}</p></article>)}</div></section>}
+    {selected&&<AssumptionDrawer assumption={selected.title} decision={decision} onClose={()=>setSelected(null)} onGo={()=>navigate('/stress-test',{state:{assumption:selected.title}})}/>} 
+    <DownloadModal open={download} onClose={()=>setDownload(false)} decision={decision} analysis={analysis}/>
+  </main>;
+}
+
+function FindingView({title,icon:Icon,tone,items,onClick}){return <section><div className="finding-heading"><div className={`finding-title-icon ${tone}`}><Icon/></div><div><span className="eyebrow">DEEP DIVE</span><h2>{title}</h2></div></div><div className="finding-list">{items.map((x,i)=><article key={i} className={`finding-row ${tone}`}><div><span className="eyebrow">{tone.toUpperCase()}</span><h3>{x.title||x.claim}</h3><p>{x.description||x.missing_evidence}</p></div>{onClick&&<button className="btn soft" onClick={()=>onClick(x)}>Stress test <ArrowRightSmall/></button>}</article>)}</div></section>}
+function ArrowRightSmall(){return <span aria-hidden="true">→</span>}
+function AssumptionDrawer({assumption,decision,onClose,onGo}){const [checks,setChecks]=useState({}); const options=['Verified','Unverified','False']; return <div className="drawer-layer" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><aside className="assumption-drawer"><button className="drawer-close" onClick={onClose}>×</button><span className="eyebrow">ASSUMPTION DETAIL</span><div className="drawer-tag"><ShieldAlert size={14}/> Assumption</div><h2>“{assumption}”</h2><div className="confidence-pill">Confidence: High</div><div className="drawer-section"><span>WHY THIS MAY BE AN ASSUMPTION</span><p>Your reasoning appears to connect a desired outcome with a condition that has not yet been fully verified.</p></div><div className="evidence-check"><span className="drawer-label">EVIDENCE CHECK</span>{['Direct evidence for the claim','Evidence about long-term impact','Evidence from someone with first-hand experience'].map((x,i)=><div className="evidence-row" key={i}><span>{x}</span><div>{options.map((option)=><button type="button" key={option} className={checks[i]===option?'selected':''} onClick={()=>setChecks(s=>({...s,[i]:option}))}>{option}</button>)}</div></div>)}</div><button className="btn gold full" onClick={onGo}>Open Stress Test <span>→</span></button><small className="drawer-note">Decision context: {decision?.decision}</small></aside></div>}
